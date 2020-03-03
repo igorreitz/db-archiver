@@ -1,0 +1,77 @@
+apply plugin: 'groovy'
+apply plugin: 'com.palantir.docker'
+
+repositories {
+    mavenCentral()
+}
+
+buildscript {
+    repositories {
+        mavenCentral()
+
+        maven {
+            url "https://plugins.gradle.org/m2/"
+        }
+    }
+    dependencies {
+        classpath "gradle.plugin.com.palantir.gradle.docker:gradle-docker:+"
+    }
+}
+
+dependencies {
+    compile 'org.codehaus.groovy:groovy-all:2.5.9'
+
+    compile 'org.apache.logging.log4j:log4j-api:2.13.0'
+    compile 'org.apache.logging.log4j:log4j-core:2.13.0'
+    compile 'org.apache.logging.log4j:log4j-slf4j-impl:2.13.0'
+
+    compile 'mysql:mysql-connector-java:8.0.19'
+
+    compile 'org.quartz-scheduler:quartz:2.3.2'
+}
+
+docker {
+    name "dockerhub.com/reitz/db-archiver:${version}"
+    tag 'version', "dockerhub.com/reitz/db-archiver:${version}"
+    tag 'latest', "dockerhub.com/reitz/db-archiver:latest"
+
+    //noinspection GroovyAssignabilityCheck
+    copySpec.with {
+        from('build/distributions') {
+            into 'build/distributions'
+        }
+    }
+}
+
+jar {
+    archiveName = 'db-archiver.jar'
+    //noinspection GroovyAssignabilityCheck
+    manifest {
+        attributes(
+//            'Class-Path': configurations.compile.collect { _ -> "lib/$_.name" }.join(' '),
+            'Main-Class': 'ru.reitz.db_archiver.App'
+        )
+    }
+}
+
+task distr (type: Zip) {
+    description = 'Build distribution archive'
+    delete fileTree('build/distributions')
+    dependsOn jar
+    into('lib') {
+        from configurations.compile
+    }
+    from jar
+}
+
+task cleanDistributions (type: Delete) {
+    doFirst {
+        delete fileTree('build/distributions')
+    }
+}
+
+
+task buildAndPublish (dependsOn: [distr]) {
+    finalizedBy dockerTagsPush
+    group 'build'
+}
